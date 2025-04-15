@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE BEAT - Teste de Importação</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f8f9fa; }
+        .header { background-color: #17a2b8; color: white; padding: 1.5rem 0; margin-bottom: 1.5rem; }
+        .upload-area { border: 2px dashed #ced4da; border-radius: 0.5rem; padding: 2rem; text-align: center; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="header text-center">
+        <h1>The Beat - Teste de Importação</h1>
+        <p>Verificação de compatibilidade de arquivos Excel</p>
+    </div>
+
+    <div class="container">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-file-earmark-excel me-1"></i> Importar Arquivo Excel
+            </div>
+            <div class="card-body">
+                <div class="upload-area" id="upload-area">
+                    <i class="bi bi-file-earmark-excel" style="font-size: 3rem; color: #17a2b8;"></i>
+                    <p>Clique ou arraste um arquivo Excel aqui</p>
+                    <input type="file" id="file-input" accept=".xlsx, .xls" style="display: none;">
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-table me-1"></i> Resultados do Processamento
+            </div>
+            <div class="card-body">
+                <div id="results">
+                    <p class="text-muted">Nenhum arquivo processado ainda.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configurar event listeners
+        document.addEventListener('DOMContentLoaded', function()  {
+            const uploadArea = document.getElementById('upload-area');
+            const fileInput = document.getElementById('file-input');
+            
+            uploadArea.addEventListener('click', () => fileInput.click());
+            uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); this.style.borderColor = '#17a2b8'; });
+            uploadArea.addEventListener('dragleave', () => { this.style.borderColor = '#ced4da'; });
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                this.style.borderColor = '#ced4da';
+                if (e.dataTransfer.files.length) {
+                    fileInput.files = e.dataTransfer.files;
+                    handleFileUpload(e.dataTransfer.files[0]);
+                }
+            });
+            
+            fileInput.addEventListener('change', function() {
+                if (this.files.length) handleFileUpload(this.files[0]);
+            });
+        });
+
+        // Processar arquivo Excel
+        function handleFileUpload(file) {
+            if (!file.name.match(/\.(xlsx|xls)$/i)) {
+                alert('Por favor, selecione um arquivo Excel válido.');
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const results = processExcelData(workbook);
+                    displayResults(results);
+                } catch (error) {
+                    alert('Erro ao processar o arquivo: ' + error.message);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Processar dados do Excel
+        function processExcelData(workbook) {
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet);
+            
+            if (jsonData.length === 0) throw new Error('Arquivo vazio');
+            
+            const colunas = Object.keys(jsonData[0]);
+            const colunaData = findColumn(colunas, ['Date', 'Data', 'data']);
+            const colunaConsultor = findColumn(colunas, ['Account manager', 'Consultant', 'consultor']);
+            const colunaProduto = findColumn(colunas, ['Product', 'Produto', 'produto']);
+            const colunaValor = findColumn(colunas, ['Total', 'Valor', 'valor']);
+            
+            return {
+                totalLinhas: jsonData.length,
+                colunas: { data: colunaData, consultor: colunaConsultor, produto: colunaProduto, valor: colunaValor },
+                amostra: jsonData.slice(0, 5)
+            };
+        }
+
+        // Encontrar coluna por possíveis nomes
+        function findColumn(colunas, possiveisNomes) {
+            for (const nome of possiveisNomes) {
+                const coluna = colunas.find(col => 
+                    col === nome || col.toLowerCase() === nome.toLowerCase() || 
+                    col.toLowerCase().includes(nome.toLowerCase())
+                );
+                if (coluna) return coluna;
+            }
+            return null;
+        }
+
+        // Exibir resultados
+        function displayResults(data) {
+            const resultsDiv = document.getElementById('results');
+            let html = `<h5>Arquivo processado: ${data.totalLinhas} linhas</h5>`;
+            
+            // Colunas identificadas
+            html += '<p><strong>Colunas identificadas:</strong></p><ul>';
+            html += `<li>Data: ${data.colunas.data || 'Não encontrada'}</li>`;
+            html += `<li>Consultor: ${data.colunas.consultor || 'Não encontrada'}</li>`;
+            html += `<li>Produto: ${data.colunas.produto || 'Não encontrada'}</li>`;
+            html += `<li>Valor: ${data.colunas.valor || 'Não encontrada'}</li></ul>`;
+            
+            // Conclusão
+            if (data.colunas.data && data.colunas.consultor && data.colunas.produto && data.colunas.valor) {
+                html += '<div class="alert alert-success mt-3">';
+                html += '<h5><i class="bi bi-check-circle-fill me-2"></i>Arquivo compatível!</h5>';
+                html += '<p>Todas as colunas necessárias foram identificadas. Este arquivo é compatível com o dashboard.</p>';
+                html += '</div>';
+            } else {
+                html += '<div class="alert alert-warning mt-3">';
+                html += '<h5><i class="bi bi-exclamation-triangle-fill me-2"></i>Arquivo incompatível</h5>';
+                html += '<p>Nem todas as colunas necessárias foram identificadas. Verifique o formato do arquivo.</p>';
+                html += '</div>';
+            }
+            
+            resultsDiv.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
